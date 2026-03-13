@@ -1,0 +1,21 @@
+# Environment
+.env
+
+# Keys - NEVER commit
+config/keys/*.json
+
+# Node
+node_modules/
+x402-facilitator/node_modules/
+x402-facilitator/*.js
+x402-facilitator/*.d.ts
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# OZ Relayer source (cloned during setup)
+openzeppelin-relayer/

@@ -1,0 +1,26 @@
+{
+  "name": "perkos-x402-facilitator",
+  "version": "0.1.0",
+  "description": "PerkOS x402 Facilitator plugin for Stellar",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": [
+    "perkos",
+    "x402",
+    "stellar",
+    "facilitator"
+  ],
+  "author": "PerkOS",
+  "license": "MIT",
+  "dependencies": {
+    "@openzeppelin/relayer-plugin-x402-facilitator": "^0.4.0",
+    "@openzeppelin/relayer-sdk": "^1.10.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  }
+}
