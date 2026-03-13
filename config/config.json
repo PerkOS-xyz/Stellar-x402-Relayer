@@ -3,7 +3,7 @@
     {
       "id": "stellar-relayer",
       "name": "PerkOS Stellar Relayer",
-      "network": "testnet",
+      "network": "mainnet",
       "paused": false,
       "network_type": "stellar",
       "signer_id": "local-signer",
@@ -41,11 +41,11 @@
       "config": {
         "networks": [
           {
-            "network": "stellar:testnet",
+            "network": "stellar:pubnet",
             "type": "stellar",
             "relayer_id": "stellar-relayer",
             "assets": [
-              "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA"
+              "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75"
             ]
           }
         ]

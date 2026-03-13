@@ -90,23 +90,24 @@ docker compose up -d
 curl -H "Authorization: Bearer <API_KEY>" \
   http://localhost:8080/api/v1/relayers/stellar-relayer
 
-# Fund on testnet
-curl "https://friendbot.stellar.org?addr=<RELAYER_ADDRESS>"
+# Fund the relayer account with XLM (mainnet)
+# The relayer needs a small XLM balance to pay network fees (~$0.00001/tx)
+# Send ~10 XLM to the relayer address from any Stellar wallet
 ```
 
 ## Configuration
 
 ### Networks
 
-- `stellar:testnet` — for development (pre-configured)
-- `stellar:pubnet` — for production (add when ready)
+- `stellar:pubnet` — **production (pre-configured)**
+- `stellar:testnet` — for development (add to config when needed)
 
 ### Supported Assets
 
 | Network | Asset | Contract |
 |---------|-------|----------|
+| pubnet | USDC | `CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75` |
 | testnet | USDC | `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` |
-| pubnet | USDC | *(to be configured)* |
 
 ## Integrating with PerkOS Stack
 
