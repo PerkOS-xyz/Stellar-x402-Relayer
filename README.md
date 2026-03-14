@@ -1,43 +1,84 @@
 # PerkOS Stellar x402 Relayer
 
-x402 payment facilitator for Stellar, powered by [OpenZeppelin Relayer](https://docs.openzeppelin.com/relayer).
+x402 payment facilitator for Stellar — part of **PerkOS Infrastructure**.
 
-Verifies and settles x402 payments on Stellar (USDC) so that PerkOS Stack can accept Stellar as a payment network alongside EVM chains.
+Verifies and settles [x402](https://github.com/coinbase/x402) payments on Stellar (USDC), enabling AI agents to pay for API calls using the HTTP 402 Payment Required protocol. Powered by [OpenZeppelin Relayer](https://docs.openzeppelin.com/relayer).
+
+## Why
+
+The agentic economy needs payment rails on every chain. This relayer extends PerkOS Stack to support Stellar alongside EVM networks — same x402 protocol, same developer experience, new network.
+
+- **Agents pay with one HTTP header** — no wallet popups, no manual approvals
+- **Relayer covers all Stellar fees** (~$0.00001/tx) — agents never need XLM
+- **USDC on Stellar** — fast settlement, near-zero cost
+- **Plugs directly into PerkOS Stack** — unified multi-chain payment infrastructure
 
 ## Architecture
 
-```
-┌─────────────┐     x402 request      ┌──────────────────┐     settle tx     ┌─────────────┐
-│  PerkOS      │ ──────────────────▶  │  Stellar x402    │ ───────────────▶  │   Stellar   │
-│  Stack       │ ◀──────────────────  │  Relayer         │ ◀───────────────  │   Network   │
-│              │     verify/settle     │  (OZ Relayer +   │     tx result     │  (testnet/  │
-│              │     response          │   x402 plugin)   │                   │   pubnet)   │
-└─────────────┘                       └──────────────────┘                   └─────────────┘
-                                             │
-                                             ▼
-                                       ┌──────────┐
-                                       │  Redis   │
-                                       └──────────┘
+```mermaid
+graph LR
+    subgraph "Client"
+        A[AI Agent / App]
+    end
+
+    subgraph "PerkOS Infrastructure"
+        B[PerkOS Stack]
+        C[Stellar x402 Relayer]
+        D[(Redis)]
+    end
+
+    subgraph "Blockchain"
+        E[Stellar Network]
+    end
+
+    A -->|"1. API request + X-PAYMENT header"| B
+    B -->|"2. Detect stellar:* network"| C
+    C -->|"3. Verify Soroban auth"| C
+    C <-->|"Cache"| D
+    C -->|"4. Settle payment on-chain"| E
+    E -->|"5. Tx result"| C
+    C -->|"6. Verification result"| B
+    B -->|"7. API response"| A
+
+    style B fill:#8e2051,stroke:#eb1b69,color:#fff
+    style C fill:#76437b,stroke:#eb1b69,color:#fff
+    style D fill:#45193c,stroke:#eb1b69,color:#fff
+    style E fill:#1d1029,stroke:#eb1b69,color:#fff
 ```
 
-- **Stack** detects `stellar:*` network in x402 requests → proxies to this relayer
-- **Relayer** verifies Soroban auth entries, settles payments on-chain
-- **Relayer account** pays all Stellar network fees (~$0.00001/tx) — users never need XLM
+## Payment Flow
+
+```mermaid
+sequenceDiagram
+    participant Agent as AI Agent
+    participant API as Paid API
+    participant Stack as PerkOS Stack
+    participant Relayer as Stellar x402 Relayer
+    participant Stellar as Stellar Network
+
+    Agent->>API: GET /api/weather
+    API-->>Agent: 402 Payment Required<br/>{price: "0.01", asset: "USDC", network: "stellar:pubnet"}
+
+    Agent->>Agent: Sign Stellar payment authorization
+
+    Agent->>API: GET /api/weather<br/>X-PAYMENT: {payload}
+    API->>Stack: Forward payment for verification
+    Stack->>Relayer: Proxy (stellar:* detected)
+    Relayer->>Relayer: Verify Soroban auth entries
+    Relayer->>Stellar: Submit settlement tx
+    Stellar-->>Relayer: Tx confirmed
+    Relayer-->>Stack: Payment verified + settled
+    Stack-->>API: Payment valid
+    API-->>Agent: 200 OK + weather data
+```
 
 ## Endpoints
-
-All routes via the plugin endpoint:
 
 | Route | Method | Description |
 |-------|--------|-------------|
 | `/api/v1/plugins/x402-facilitator/call/verify` | POST | Verify payment payload |
 | `/api/v1/plugins/x402-facilitator/call/settle` | POST | Settle payment on-chain |
 | `/api/v1/plugins/x402-facilitator/call/supported` | GET/POST | List supported payment kinds |
-
-## Prerequisites
-
-- Docker & Docker Compose
-- Rust toolchain (for generating keystore files)
 
 ## Quick Start
 
@@ -53,10 +94,10 @@ cd ..
 ### 2. Generate relayer keys
 
 ```bash
-# Clone OZ Relayer repo temporarily to use key generation tool
+# Clone OZ Relayer to use key generation tool
 git clone https://github.com/OpenZeppelin/openzeppelin-relayer /tmp/oz-relayer
 
-# Generate keystore (password must have uppercase, lowercase, number, special char)
+# Generate keystore
 cd /tmp/oz-relayer
 cargo run --example create_key -- \
   --password 'YourSecurePass123!' \
@@ -83,24 +124,25 @@ cp .env.example .env
 docker compose up -d
 ```
 
-### 5. Get relayer address & fund it
+### 5. Get relayer address and fund it
 
 ```bash
 # Get the relayer's Stellar address
 curl -H "Authorization: Bearer <API_KEY>" \
   http://localhost:8080/api/v1/relayers/stellar-relayer
 
-# Fund the relayer account with XLM (mainnet)
-# The relayer needs a small XLM balance to pay network fees (~$0.00001/tx)
-# Send ~10 XLM to the relayer address from any Stellar wallet
+# Fund with ~10 XLM for network fees
+# The relayer pays all Stellar fees so agents don't need XLM
 ```
 
 ## Configuration
 
-### Networks
+### Supported Networks
 
-- `stellar:pubnet` — **production (pre-configured)**
-- `stellar:testnet` — for development (add to config when needed)
+| Network | Environment | Status |
+|---------|-------------|--------|
+| `stellar:pubnet` | Production | Pre-configured |
+| `stellar:testnet` | Development | Add to config |
 
 ### Supported Assets
 
@@ -109,14 +151,44 @@ curl -H "Authorization: Bearer <API_KEY>" \
 | pubnet | USDC | `CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75` |
 | testnet | USDC | `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` |
 
-## Integrating with PerkOS Stack
+## Integration with PerkOS Stack
 
-In Stack's `X402Service`, detect `stellar:*` networks and proxy to this relayer:
+This relayer is designed to work as part of PerkOS Infrastructure. PerkOS Stack automatically detects `stellar:*` networks in x402 requests and proxies them to this relayer.
+
+```mermaid
+graph TB
+    subgraph "PerkOS Infrastructure"
+        Stack[PerkOS Stack<br/>stack.perkos.xyz]
+
+        subgraph "Payment Networks"
+            EVM[EVM Chains<br/>Celo, Base, Monad...]
+            Stellar[Stellar x402 Relayer<br/>stellar-relayer.perkos.xyz]
+        end
+
+        subgraph "Agent Protocols"
+            ERC[ERC-8004<br/>Agent Discovery]
+            A2A[A2A Protocol<br/>Agent Communication]
+        end
+    end
+
+    Stack -->|"evm:*"| EVM
+    Stack -->|"stellar:*"| Stellar
+    Stack --- ERC
+    Stack --- A2A
+
+    style Stack fill:#eb1b69,stroke:#eb1b69,color:#fff
+    style EVM fill:#8e2051,stroke:#eb1b69,color:#fff
+    style Stellar fill:#8e2051,stroke:#eb1b69,color:#fff
+    style ERC fill:#76437b,stroke:#eb1b69,color:#fff
+    style A2A fill:#76437b,stroke:#eb1b69,color:#fff
+```
+
+### Stack Integration Example
 
 ```typescript
-// In X402Service.verify() and X402Service.settle()
+// In PerkOS Stack X402Service
 if (network.startsWith('stellar:')) {
-  const relayerUrl = process.env.STELLAR_RELAYER_URL; // e.g. http://relayer:8080
+  const relayerUrl = process.env.STELLAR_RELAYER_URL;
   const response = await fetch(
     `${relayerUrl}/api/v1/plugins/x402-facilitator/call/verify`,
     {
@@ -132,27 +204,31 @@ if (network.startsWith('stellar:')) {
 }
 ```
 
-## Deployment
+## Live Deployment
 
-Target: **perkos-cloud-01** (`46.225.62.30`)
+| Service | URL |
+|---------|-----|
+| Relayer | [stellar-relayer.perkos.xyz](https://stellar-relayer.perkos.xyz) |
+| Demo App | [stellar-x402.perkos.xyz](https://stellar-x402.perkos.xyz) |
+| PerkOS Stack | [stack.perkos.xyz](https://stack.perkos.xyz) |
 
-```bash
-# On perkos-cloud-01
-mkdir -p /opt/stellar-x402-relayer
-cd /opt/stellar-x402-relayer
-git clone https://github.com/PerkOS-xyz/Stellar-x402-Relayer.git .
-cp .env.example .env
-# Configure .env
-docker compose up -d
-```
+## Tech Stack
+
+- **Runtime:** [OpenZeppelin Relayer](https://docs.openzeppelin.com/relayer) (Rust)
+- **Plugin:** Custom x402 facilitator (TypeScript)
+- **Cache:** Redis
+- **Deployment:** Docker Compose
+- **Network:** Stellar (Soroban smart contracts)
+- **Asset:** USDC via Soroban token contract
 
 ## References
 
-- [x402 on Stellar](https://stellar.org/blog/foundation-news/x402-on-stellar)
+- [x402 on Stellar — Stellar Foundation](https://stellar.org/blog/foundation-news/x402-on-stellar)
 - [OZ Relayer x402 Facilitator Guide](https://docs.openzeppelin.com/relayer/guides/stellar-x402-facilitator-guide)
 - [OZ x402 Facilitator Plugin](https://github.com/OpenZeppelin/relayer-plugin-x402-facilitator)
-- [OZ Relayer Example](https://github.com/OpenZeppelin/openzeppelin-relayer/tree/main/examples/x402-facilitator-plugin)
-- [x402 Protocol](https://github.com/coinbase/x402)
+- [x402 Protocol — Coinbase](https://github.com/coinbase/x402)
+- [PerkOS Stack](https://github.com/PerkOS-xyz/Stack)
+- [PerkOS](https://perkos.xyz)
 
 ## License
 
